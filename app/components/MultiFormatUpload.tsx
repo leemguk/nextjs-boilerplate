@@ -36,6 +36,8 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
   }>({ valid: 0, duplicates: 0, invalidEmails: 0 });
   const [showPreview, setShowPreview] = useState(false);
   const [selectedSheet, setSelectedSheet] = useState<string>('');
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [sheetData, setSheetData] = useState<Record<string, string[][]>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const supportedFormats = {
@@ -80,27 +82,62 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
     return result;
   };
 
-  const parseExcel = async (file: File): Promise<{ data: string[][]; sheets: string[] }> => {
-    // Note: In a real implementation, you'd use a library like SheetJS
-    // For now, we'll show the structure and handle it as CSV
-    
-    // This is a placeholder - in production you'd use:
-    // import * as XLSX from 'xlsx';
-    
-    try {
-      // Mock Excel parsing (replace with actual SheetJS implementation)
-      const text = await file.text();
+  const parseExcel = async (file: File): Promise<{ data: string[][]; sheets: string[]; sheetData: Record<string, string[][]> }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
       
-      // If it's actually a CSV file with .xlsx extension, parse as CSV
-      const data = parseCSV(text);
-      
-      return {
-        data,
-        sheets: ['Sheet1'] // Mock sheet names
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          
+          // Load SheetJS dynamically
+          const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+          
+          const workbook = XLSX.read(data, { 
+            type: 'array',
+            cellText: false,
+            cellDates: true
+          });
+          
+          const sheets = workbook.SheetNames;
+          const allSheetData: Record<string, string[][]> = {};
+          
+          // Parse all sheets
+          for (const sheetName of sheets) {
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+              header: 1,
+              raw: false,
+              dateNF: 'yyyy-mm-dd'
+            }) as string[][];
+            
+            // Filter out empty rows
+            const filteredData = jsonData.filter(row => 
+              row.some(cell => cell && cell.toString().trim() !== '')
+            );
+            
+            allSheetData[sheetName] = filteredData;
+          }
+          
+          // Use first sheet as default
+          const firstSheet = sheets[0];
+          const firstSheetData = allSheetData[firstSheet];
+          
+          resolve({
+            data: firstSheetData,
+            sheets,
+            sheetData: allSheetData
+          });
+          
+        } catch (error) {
+          console.error('Excel parsing error:', error);
+          reject(new Error('Failed to parse Excel file. Please ensure it\'s a valid Excel file.'));
+        }
       };
-    } catch (error) {
-      throw new Error('Failed to parse Excel file. Please ensure it\'s a valid Excel file or try exporting as CSV.');
-    }
+      
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsArrayBuffer(file);
+    });
   };
 
   const parseGoogleSheets = async (url: string): Promise<string[][]> => {
@@ -144,8 +181,8 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
       const row = data[i];
       if (row.length <= Math.max(nameCol, emailCol)) continue;
 
-      const name = row[nameCol]?.trim() || '';
-      const email = row[emailCol]?.trim().toLowerCase() || '';
+      const name = row[nameCol]?.toString().trim() || '';
+      const email = row[emailCol]?.toString().trim().toLowerCase() || '';
 
       if (!name || !email) continue;
 
@@ -182,7 +219,7 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
   };
 
   const detectColumns = (headers: string[]) => {
-    const headerRow = headers.map(h => h.toLowerCase());
+    const headerRow = headers.map(h => h?.toString().toLowerCase() || '');
     const nameIndex = headerRow.findIndex(h => 
       h.includes('name') || h.includes('customer') || h.includes('first') || h.includes('full')
     );
@@ -212,12 +249,15 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
     setFileFormat(detectedFormat);
     
     try {
-      let parsed: { data: string[][]; sheets?: string[] };
+      let parsed: { data: string[][]; sheets?: string[]; sheetData?: Record<string, string[][]> };
       
       switch (detectedFormat) {
         case 'xlsx':
         case 'xls':
           parsed = await parseExcel(file);
+          setAvailableSheets(parsed.sheets || []);
+          setSheetData(parsed.sheetData || {});
+          setSelectedSheet(parsed.sheets?.[0] || '');
           break;
         case 'tsv':
           const tsvText = await file.text();
@@ -236,10 +276,6 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
 
       setParsedData(parsed);
       setHeaders(parsed.data[0]);
-      
-      if (parsed.sheets && parsed.sheets.length > 1) {
-        setSelectedSheet(parsed.sheets[0]);
-      }
 
       // Auto-detect columns and process data
       const { nameIndex, emailIndex } = detectColumns(parsed.data[0]);
@@ -252,6 +288,17 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
     }
     
     setIsProcessing(false);
+  };
+
+  const handleSheetChange = (newSheetName: string) => {
+    setSelectedSheet(newSheetName);
+    const newData = sheetData[newSheetName];
+    if (newData) {
+      setHeaders(newData[0]);
+      setParsedData({ ...parsedData, data: newData });
+      const { nameIndex, emailIndex } = detectColumns(newData[0]);
+      processData(newData, nameIndex, emailIndex, newSheetName);
+    }
   };
 
   const handleGoogleSheetsImport = async () => {
@@ -314,6 +361,8 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
     setPreviewData([]);
     setGoogleSheetsUrl('');
     setSelectedSheet('');
+    setAvailableSheets([]);
+    setSheetData({});
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -333,20 +382,17 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
         </div>
 
         {/* Sheet Selection (for Excel files) */}
-        {parsedData.sheets && parsedData.sheets.length > 1 && (
+        {availableSheets.length > 1 && (
           <div className="mb-4 p-4 bg-gray-50 rounded">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Select Sheet
             </label>
             <select
               value={selectedSheet}
-              onChange={(e) => {
-                setSelectedSheet(e.target.value);
-                // In a real implementation, you'd switch to the selected sheet's data
-              }}
+              onChange={(e) => handleSheetChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
             >
-              {parsedData.sheets.map((sheet) => (
+              {availableSheets.map((sheet) => (
                 <option key={sheet} value={sheet}>
                   {sheet}
                 </option>
@@ -371,7 +417,7 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
             >
               {headers.map((header, index) => (
                 <option key={index} value={index}>
-                  Column {index + 1}: {header}
+                  Column {index + 1}: {header?.toString() || `Column ${index + 1}`}
                 </option>
               ))}
             </select>
@@ -391,7 +437,7 @@ export default function MultiFormatUpload({ onCustomersImported }: FileUploadPro
             >
               {headers.map((header, index) => (
                 <option key={index} value={index}>
-                  Column {index + 1}: {header}
+                  Column {index + 1}: {header?.toString() || `Column ${index + 1}`}
                 </option>
               ))}
             </select>
