@@ -2,10 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import MultiFormatUpload from '../components/MultiFormatUpload';
+
+interface Customer {
+  name: string;
+  email: string;
+}
 
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [customers, setCustomers] = useState('');
+  const [importedCustomers, setImportedCustomers] = useState<Customer[]>([]);
+  const [activeTab, setActiveTab] = useState<'manual' | 'upload'>('manual');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
@@ -29,21 +37,36 @@ export default function Dashboard() {
     router.push('/');
   };
 
+  const handleCustomersImported = (newCustomers: Customer[]) => {
+    setImportedCustomers(newCustomers);
+    setActiveTab('manual'); // Switch to manual tab to show imported data
+    
+    // Convert imported customers to text format for the textarea
+    const customerText = newCustomers.map(c => `${c.name}, ${c.email}`).join('\n');
+    setCustomers(customerText);
+    
+    setMessage(`✅ Successfully imported ${newCustomers.length} customers from file!`);
+  };
+
   const handleSendEmails = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
 
     try {
-      // Parse customer data
-      const customerLines = customers.trim().split('\n');
-      const customerList = customerLines.map(line => {
-        const [name, email] = line.split(',').map(s => s.trim());
-        return { name, email };
-      }).filter(customer => customer.name && customer.email);
+      let customerList: Customer[] = [];
+
+      // Parse customer data from textarea
+      if (customers.trim()) {
+        const customerLines = customers.trim().split('\n');
+        customerList = customerLines.map(line => {
+          const [name, email] = line.split(',').map(s => s.trim());
+          return { name, email };
+        }).filter(customer => customer.name && customer.email);
+      }
 
       if (customerList.length === 0) {
-        setMessage('Please enter valid customer data');
+        setMessage('Please enter valid customer data or import from a file');
         setLoading(false);
         return;
       }
@@ -70,6 +93,7 @@ export default function Dashboard() {
       if (result.success) {
         setMessage(`✅ ${result.data.sent} emails sent successfully!`);
         setCustomers(''); // Clear the form
+        setImportedCustomers([]); // Clear imported data
       } else {
         setMessage(`❌ Error: ${result.error}`);
       }
@@ -174,16 +198,43 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Send Emails Form */}
-            <div className="lg:col-span-2">
+            {/* Main Content Area */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Import Methods */}
               <div className="bg-white shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
                   <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                    Send Review Request Emails
+                    Add Customers
                   </h3>
                   
-                  <form onSubmit={handleSendEmails}>
-                    <div className="mb-4">
+                  {/* Tab Selection */}
+                  <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setActiveTab('manual')}
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                        activeTab === 'manual'
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      ✏️ Manual Entry
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('upload')}
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                        activeTab === 'upload'
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      📁 Import File
+                    </button>
+                  </div>
+
+                  {/* Tab Content */}
+                  {activeTab === 'manual' ? (
+                    <div>
                       <label htmlFor="customers" className="block text-sm font-medium text-gray-700 mb-2">
                         Customer List
                       </label>
@@ -198,10 +249,27 @@ export default function Dashboard() {
                         onChange={(e) => setCustomers(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="John Doe, john@example.com&#10;Jane Smith, jane@example.com&#10;Bob Johnson, bob@example.com"
-                        required
                       />
+                      {importedCustomers.length > 0 && (
+                        <p className="mt-2 text-sm text-green-600">
+                          ✅ {importedCustomers.length} customers imported from file
+                        </p>
+                      )}
                     </div>
+                  ) : (
+                    <MultiFormatUpload onCustomersImported={handleCustomersImported} />
+                  )}
+                </div>
+              </div>
 
+              {/* Send Emails Section */}
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    Send Review Request Emails
+                  </h3>
+
+                  <form onSubmit={handleSendEmails}>
                     {message && (
                       <div className={`mb-4 p-3 rounded-md text-sm ${
                         message.includes('✅')
@@ -214,8 +282,8 @@ export default function Dashboard() {
 
                     <button
                       type="submit"
-                      disabled={loading}
-                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      disabled={loading || (!customers.trim() && importedCustomers.length === 0)}
+                      className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       {loading ? 'Sending...' : 'Send Review Request Emails'}
                     </button>
@@ -234,25 +302,35 @@ export default function Dashboard() {
                   
                   <div className="space-y-4 text-sm text-gray-600">
                     <div>
-                      <h4 className="font-medium text-gray-900">1. Add Customers</h4>
-                      <p>Enter customer details one per line: Name, Email</p>
+                      <h4 className="font-medium text-gray-900">📝 Manual Entry</h4>
+                      <p>Type customer details: Name, Email (one per line)</p>
                     </div>
                     
                     <div>
-                      <h4 className="font-medium text-gray-900">2. Send Emails</h4>
-                      <p>Click send to dispatch Trustpilot review requests</p>
+                      <h4 className="font-medium text-gray-900">📁 File Import</h4>
+                      <p>Upload CSV, Excel, or import from Google Sheets</p>
                     </div>
                     
                     <div>
-                      <h4 className="font-medium text-gray-900">3. Track Results</h4>
-                      <p>Monitor email delivery and review responses</p>
+                      <h4 className="font-medium text-gray-900">📧 Send Emails</h4>
+                      <p>Review and send Trustpilot review requests</p>
                     </div>
                   </div>
 
                   <div className="mt-6 p-3 bg-blue-50 rounded-md">
                     <p className="text-sm text-blue-700">
-                      <strong>Currently using:</strong> Trustpilot platform with your default template
+                      <strong>Currently using:</strong> Trustpilot platform with professional templates
                     </p>
+                  </div>
+
+                  <div className="mt-4 p-3 bg-green-50 rounded-md">
+                    <h4 className="font-medium text-green-800 mb-2">✨ Supported Formats:</h4>
+                    <ul className="text-sm text-green-700 space-y-1">
+                      <li>• CSV files</li>
+                      <li>• Excel (.xlsx, .xls)</li>
+                      <li>• Google Sheets</li>
+                      <li>• Tab-separated files</li>
+                    </ul>
                   </div>
                 </div>
               </div>
