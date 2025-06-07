@@ -13,9 +13,27 @@ interface ActivityItem {
   id: string;
   customerName: string;
   customerEmail: string;
-  event: 'delivered' | 'opened' | 'clicked' | 'bounced';
+  event: 'delivered' | 'opened' | 'clicked' | 'bounced' | 'spam';
   timestamp: string;
   timeAgo: string;
+  platform?: string;
+}
+
+interface AnalyticsData {
+  emailsSent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  spam: number;
+  failed: number;
+  monthlyLimit: number;
+  monthlyEmails: number;
+  deliveryRate: number;
+  openRate: number;
+  clickRate: number;
+  usagePercentage: number;
+  timeRange: string;
 }
 
 export default function Dashboard() {
@@ -25,68 +43,29 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   
-  // Analytics state
-  const [analytics, setAnalytics] = useState({
-    emailsSent: 45,
-    delivered: 44,
-    opened: 30,
-    clicked: 13,
-    bounced: 1,
+  // Analytics state with real API integration
+  const [analytics, setAnalytics] = useState<AnalyticsData>({
+    emailsSent: 0,
+    delivered: 0,
+    opened: 0,
+    clicked: 0,
+    bounced: 0,
     spam: 0,
-    monthlyLimit: 100
+    failed: 0,
+    monthlyLimit: 1000,
+    monthlyEmails: 0,
+    deliveryRate: 0,
+    openRate: 0,
+    clickRate: 0,
+    usagePercentage: 0,
+    timeRange: '30d'
   });
 
-  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([
-    {
-      id: '1',
-      customerName: 'John Doe',
-      customerEmail: 'john@example.com',
-      event: 'clicked',
-      timestamp: '2025-06-06T10:00:00Z',
-      timeAgo: '2 hours ago'
-    },
-    {
-      id: '2',
-      customerName: 'Sarah Johnson',
-      customerEmail: 'sarah@example.com',
-      event: 'opened',
-      timestamp: '2025-06-06T09:00:00Z',
-      timeAgo: '3 hours ago'
-    },
-    {
-      id: '3',
-      customerName: 'Michael Brown',
-      customerEmail: 'michael@example.com',
-      event: 'delivered',
-      timestamp: '2025-06-06T08:00:00Z',
-      timeAgo: '4 hours ago'
-    },
-    {
-      id: '4',
-      customerName: 'Emily Davis',
-      customerEmail: 'emily@example.com',
-      event: 'clicked',
-      timestamp: '2025-06-06T07:00:00Z',
-      timeAgo: 'Yesterday'
-    },
-    {
-      id: '5',
-      customerName: 'Robert Wilson',
-      customerEmail: 'robert@invalid-domain.com',
-      event: 'bounced',
-      timestamp: '2025-06-05T15:00:00Z',
-      timeAgo: 'Yesterday'
-    },
-    {
-      id: '6',
-      customerName: 'Lisa Anderson',
-      customerEmail: 'lisa@example.com',
-      event: 'opened',
-      timestamp: '2025-06-05T14:00:00Z',
-      timeAgo: '2 days ago'
-    }
-  ]);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
 
   const router = useRouter();
 
@@ -101,7 +80,87 @@ export default function Dashboard() {
     }
     
     setUser(JSON.parse(userData));
+    
+    // Fetch analytics data
+    fetchAnalytics();
+    fetchRecentActivity();
   }, [router]);
+
+  // Refetch analytics when time range changes
+  useEffect(() => {
+    if (user) {
+      fetchAnalytics();
+    }
+  }, [timeRange]);
+
+  const fetchAnalytics = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+      const response = await fetch(`${apiUrl}/api/analytics/stats?timeRange=${timeRange}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setAnalytics(result.data);
+      } else {
+        console.error('Failed to fetch analytics:', result.error);
+        setMessage('❌ Failed to load analytics data');
+      }
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      setMessage('❌ Error connecting to analytics service');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const fetchRecentActivity = async () => {
+    setActivityLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+      const response = await fetch(`${apiUrl}/api/analytics/activity?limit=6`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Transform the data to match your existing format
+        const transformedActivity = result.data.map((activity: any) => ({
+          id: activity.id,
+          customerName: activity.customerName,
+          customerEmail: activity.customerEmail,
+          event: activity.status.toLowerCase(), // Convert DELIVERED to delivered
+          timestamp: activity.updatedAt,
+          timeAgo: activity.timeAgo,
+          platform: activity.platform
+        }));
+        
+        setRecentActivity(transformedActivity);
+      } else {
+        console.error('Failed to fetch activity:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching activity:', error);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
 
   const calculateRate = (numerator: number, denominator: number): string => {
     if (denominator === 0) return '0%';
@@ -166,11 +225,11 @@ export default function Dashboard() {
         setMessage(`✅ ${result.data.sent} emails sent successfully!`);
         setCustomers('');
         
-        // Update analytics
-        setAnalytics(prev => ({
-          ...prev,
-          emailsSent: prev.emailsSent + result.data.sent
-        }));
+        // Refresh analytics after sending emails
+        setTimeout(() => {
+          fetchAnalytics();
+          fetchRecentActivity();
+        }, 1000);
       } else {
         setMessage(`❌ Error: ${result.error}`);
       }
@@ -187,7 +246,8 @@ export default function Dashboard() {
       delivered: { text: 'Email Delivered', class: 'bg-blue-100 text-blue-800' },
       opened: { text: 'Opened Email', class: 'bg-green-100 text-green-800' },
       clicked: { text: 'Clicked Link', class: 'bg-purple-100 text-purple-800' },
-      bounced: { text: 'Email Bounced', class: 'bg-red-100 text-red-800' }
+      bounced: { text: 'Email Bounced', class: 'bg-red-100 text-red-800' },
+      spam: { text: 'Marked Spam', class: 'bg-orange-100 text-orange-800' }
     };
     
     const badge = badges[event as keyof typeof badges];
@@ -262,18 +322,31 @@ export default function Dashboard() {
           {/* Page Header */}
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-            <button
-              onClick={() => {
-                if (customers.trim()) {
-                  handleSendEmails({ preventDefault: () => {} } as React.FormEvent);
-                } else {
-                  setMessage('Please add customers before sending emails');
-                }
-              }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              📧 Send Review Requests
-            </button>
+            <div className="flex items-center space-x-4">
+              {/* Time Range Selector */}
+              <select 
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as '7d' | '30d' | '90d')}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+              </select>
+              
+              <button
+                onClick={() => {
+                  if (customers.trim()) {
+                    handleSendEmails({ preventDefault: () => {} } as React.FormEvent);
+                  } else {
+                    setMessage('Please add customers before sending emails');
+                  }
+                }}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                📧 Send Review Requests
+              </button>
+            </div>
           </div>
 
           {/* Stats Grid */}
@@ -283,8 +356,19 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500">Emails Sent</h3>
                 <span className="text-gray-400">📧</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{analytics.emailsSent}</p>
-              <p className="text-xs text-gray-500 mt-1">This month</p>
+              {analyticsLoading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-20"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">{analytics.emailsSent}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {timeRange === '7d' ? 'Last 7 days' : timeRange === '30d' ? 'Last 30 days' : 'Last 90 days'}
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -292,12 +376,21 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500">Delivery Rate</h3>
                 <span className="text-gray-400">📈</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {calculateRate(analytics.delivered, analytics.emailsSent)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {analytics.delivered} of {analytics.emailsSent} delivered
-              </p>
+              {analyticsLoading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-24"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {analytics.deliveryRate}%
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {analytics.delivered} of {analytics.emailsSent} delivered
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -305,12 +398,21 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500">Email Opens</h3>
                 <span className="text-gray-400">📖</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {calculateRate(analytics.opened, analytics.delivered)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {analytics.opened} of {analytics.delivered} opened
-              </p>
+              {analyticsLoading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-24"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {analytics.openRate}%
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {analytics.opened} of {analytics.delivered} opened
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -318,12 +420,21 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500">Link Clicks</h3>
                 <span className="text-gray-400">🔗</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {calculateRate(analytics.clicked, analytics.opened)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {analytics.clicked} of {analytics.opened} clicked
-              </p>
+              {analyticsLoading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-24"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {analytics.clickRate}%
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {analytics.clicked} of {analytics.opened} clicked
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -334,10 +445,19 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500">Bounces</h3>
                 <span className="text-orange-400">⚠️</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{analytics.bounced}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {calculateRate(analytics.bounced, analytics.emailsSent)} bounce rate
-              </p>
+              {analyticsLoading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-12 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-20"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">{analytics.bounced}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {calculateRate(analytics.bounced, analytics.emailsSent)} bounce rate
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -345,10 +465,19 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500">Spam Reports</h3>
                 <span className="text-red-400">🚫</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{analytics.spam}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {calculateRate(analytics.spam, analytics.emailsSent)} spam rate
-              </p>
+              {analyticsLoading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-12 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-20"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">{analytics.spam}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {calculateRate(analytics.spam, analytics.emailsSent)} spam rate
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -356,15 +485,24 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500">Monthly Usage</h3>
                 <span className="text-blue-400">📊</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {analytics.emailsSent}/{analytics.monthlyLimit}
-              </p>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full" 
-                  style={{ width: `${(analytics.emailsSent / analytics.monthlyLimit) * 100}%` }}
-                ></div>
-              </div>
+              {analyticsLoading ? (
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-20 mb-2"></div>
+                  <div className="h-2 bg-gray-200 rounded w-full"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {analytics.monthlyEmails}/{analytics.monthlyLimit}
+                  </p>
+                  <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-500" 
+                      style={{ width: `${Math.min(analytics.usagePercentage, 100)}%` }}
+                    ></div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -422,7 +560,7 @@ export default function Dashboard() {
                         disabled={loading || !customers.trim()}
                         className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
                       >
-                        {loading ? 'Adding...' : '+ Add Customers'}
+                        {loading ? 'Sending...' : 'Send Emails'}
                       </button>
                     </div>
                   ) : (
@@ -470,14 +608,20 @@ export default function Dashboard() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm text-gray-600">Monthly emails</span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {analytics.emailsSent}/{analytics.monthlyLimit}
-                      </span>
+                      {analyticsLoading ? (
+                        <div className="animate-pulse">
+                          <div className="h-4 bg-gray-200 rounded w-12"></div>
+                        </div>
+                      ) : (
+                        <span className="text-sm font-medium text-gray-900">
+                          {analytics.monthlyEmails}/{analytics.monthlyLimit}
+                        </span>
+                      )}
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${(analytics.emailsSent / analytics.monthlyLimit) * 100}%` }}
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-500" 
+                        style={{ width: `${analyticsLoading ? 0 : Math.min(analytics.usagePercentage, 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -499,29 +643,51 @@ export default function Dashboard() {
               </div>
               
               <div className="divide-y divide-gray-200">
-                {recentActivity.map((activity) => (
-                  <div key={activity.id} className="p-6 flex items-center space-x-4">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-medium text-gray-600">
-                        {activity.customerName.charAt(0)}
-                      </span>
+                {activityLoading ? (
+                  // Loading skeleton
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-6 animate-pulse">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-48"></div>
+                        </div>
+                        <div className="w-20 h-6 bg-gray-200 rounded"></div>
+                        <div className="w-16 h-4 bg-gray-200 rounded"></div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {activity.customerName}
-                      </p>
-                      <p className="text-sm text-gray-500 truncate">
-                        {activity.customerEmail}
-                      </p>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {getEventBadge(activity.event)}
-                    </div>
-                    <div className="flex-shrink-0 text-sm text-gray-500">
-                      {activity.timeAgo}
-                    </div>
+                  ))
+                ) : recentActivity.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">
+                    <p>No recent activity</p>
+                    <p className="text-sm">Activity will appear here after sending emails</p>
                   </div>
-                ))}
+                ) : (
+                  recentActivity.map((activity) => (
+                    <div key={activity.id} className="p-6 flex items-center space-x-4">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-medium text-gray-600">
+                          {activity.customerName.charAt(0)}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {activity.customerName}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate">
+                          {activity.customerEmail}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {getEventBadge(activity.event)}
+                      </div>
+                      <div className="flex-shrink-0 text-sm text-gray-500">
+                        {activity.timeAgo}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
