@@ -285,16 +285,6 @@ export default function Dashboard() {
             </div>
             
             <div className="flex items-center space-x-4">
-              <button className="p-2 text-gray-400 hover:text-gray-500">
-                <span className="text-lg">❓</span>
-              </button>
-              <button 
-              onClick={() => setShowSettings(true)}
-              className="p-2 text-gray-400 hover:text-gray-500"
-              title="Email Settings"
-              >
-              <span className="text-lg">⚙️</span>
-              </button>
               
               <div className="relative">
                 <button
@@ -315,6 +305,15 @@ export default function Dashboard() {
       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
     >
       Email Settings
+    </button>
+    <button
+      onClick={() => {
+        alert('Help documentation coming soon!');
+        setShowUserMenu(false);
+      }}
+      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+    >
+      Help & Support
     </button>
     <button
       onClick={handleLogout}
