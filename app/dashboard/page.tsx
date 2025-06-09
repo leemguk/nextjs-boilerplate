@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MultiFormatUpload from '../components/MultiFormatUpload';
+import EmailSettingsComponent from '../components/EmailSettingsComponent';
 
 interface Customer {
   name: string;
@@ -44,6 +45,7 @@ export default function Dashboard() {
   const [message, setMessage] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [showSettings, setShowSettings] = useState(false);
   
   // Analytics state with real API integration
   const [analytics, setAnalytics] = useState<AnalyticsData>({
@@ -286,8 +288,12 @@ export default function Dashboard() {
               <button className="p-2 text-gray-400 hover:text-gray-500">
                 <span className="text-lg">❓</span>
               </button>
-              <button className="p-2 text-gray-400 hover:text-gray-500">
-                <span className="text-lg">⚙️</span>
+              <button 
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-gray-400 hover:text-gray-500"
+              title="Email Settings"
+              >
+              <span className="text-lg">⚙️</span>
               </button>
               
               <div className="relative">
@@ -300,15 +306,24 @@ export default function Dashboard() {
                 </button>
                 
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                    <button
-                      onClick={handleLogout}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                )}
+  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+    <button
+      onClick={() => {
+        setShowSettings(true);
+        setShowUserMenu(false);
+      }}
+      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+    >
+      Email Settings
+    </button>
+    <button
+      onClick={handleLogout}
+      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+    >
+      Sign out
+    </button>
+  </div>
+)}
               </div>
             </div>
           </div>
