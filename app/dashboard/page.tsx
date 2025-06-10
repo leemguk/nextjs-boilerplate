@@ -386,93 +386,76 @@ export default function Dashboard() {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-500">Emails Sent</h3>
-                <span className="text-gray-400">📧</span>
-              </div>
-              {analyticsLoading ? (
-                <div className="animate-pulse">
-                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-20"></div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold text-gray-900">{analytics.emailsSent}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {timeRange === '7d' ? 'Last 7 days' : timeRange === '30d' ? 'Last 30 days' : 'Last 90 days'}
-                  </p>
-                </>
-              )}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+  
+  {/* Emails Sent */}
+  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+    <div className="flex items-center justify-between mb-2">
+      <h3 className="text-sm font-medium text-gray-500">Emails Sent</h3>
+      <span className="text-gray-400">📧</span>
+    </div>
+    {analyticsLoading ? (
+      <div className="animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+        <div className="h-4 bg-gray-200 rounded w-20"></div>
+      </div>
+    ) : (
+      <>
+        <p className="text-2xl font-bold text-gray-900">{analytics.emailsSent}</p>
+        <p className="text-xs text-gray-500 mt-1">
+          {timeRange === '7d' ? 'Last 7 days' : timeRange === '30d' ? 'Last 30 days' : 'Last 90 days'}
+        </p>
+      </>
+    )}
+  </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-500">Delivery Rate</h3>
-                <span className="text-gray-400">📈</span>
-              </div>
-              {analyticsLoading ? (
-                <div className="animate-pulse">
-                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-24"></div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {analytics.deliveryRate}%
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {analytics.delivered} of {analytics.emailsSent} delivered
-                  </p>
-                </>
-              )}
-            </div>
+  {/* Delivery Rate */}
+  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+    <div className="flex items-center justify-between mb-2">
+      <h3 className="text-sm font-medium text-gray-500">Delivery Rate</h3>
+      <span className="text-gray-400">📈</span>
+    </div>
+    {analyticsLoading ? (
+      <div className="animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+        <div className="h-4 bg-gray-200 rounded w-24"></div>
+      </div>
+    ) : (
+      <>
+        <p className="text-2xl font-bold text-gray-900">
+          {analytics.deliveryRate}%
+        </p>
+        <p className="text-xs text-gray-500 mt-1">
+          {analytics.delivered} of {analytics.emailsSent} delivered
+        </p>
+      </>
+    )}
+  </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-500">Email Opens</h3>
-                <span className="text-gray-400">📖</span>
-              </div>
-              {analyticsLoading ? (
-                <div className="animate-pulse">
-                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-24"></div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {analytics.openRate}%
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {analytics.opened} of {analytics.delivered} opened
-                  </p>
-                </>
-              )}
-            </div>
+  {/* Link Clicks - Updated text to emphasize importance */}
+  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+    <div className="flex items-center justify-between mb-2">
+      <h3 className="text-sm font-medium text-gray-500">Review Link Clicks</h3>
+      <span className="text-gray-400">🔗</span>
+    </div>
+    {analyticsLoading ? (
+      <div className="animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+        <div className="h-4 bg-gray-200 rounded w-24"></div>
+      </div>
+    ) : (
+      <>
+        <p className="text-2xl font-bold text-gray-900">
+          {analytics.clickRate}%
+        </p>
+        <p className="text-xs text-gray-500 mt-1">
+          {analytics.clicked} customers clicked review link
+        </p>
+      </>
+    )}
+  </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-500">Link Clicks</h3>
-                <span className="text-gray-400">🔗</span>
-              </div>
-              {analyticsLoading ? (
-                <div className="animate-pulse">
-                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-24"></div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {analytics.clickRate}%
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {analytics.clicked} of {analytics.opened} clicked
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
+</div>
 
           {/* Second Row Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
