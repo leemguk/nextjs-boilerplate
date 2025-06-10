@@ -608,7 +608,7 @@ export default function Dashboard() {
                   
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Plan</span>
-                    <span className="text-sm font-medium text-gray-900">Free Trial</span>
+                    <span className="text-sm font-medium text-gray-900">Internal Use</span>
                   </div>
                   
                   <div>
