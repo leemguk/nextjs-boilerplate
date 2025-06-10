@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MultiFormatUpload from '../components/MultiFormatUpload';
-import EmailSettingsComponent from '../../components/EmailSettingsComponent';
+import EmailSettingsComponent from '../components/EmailSettingsComponent';
 
 interface Customer {
   name: string;
