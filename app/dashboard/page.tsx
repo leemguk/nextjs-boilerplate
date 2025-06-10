@@ -369,19 +369,6 @@ export default function Dashboard() {
                 <option value="30d">Last 30 days</option>
                 <option value="90d">Last 90 days</option>
               </select>
-              
-              <button
-                onClick={() => {
-                  if (customers.trim()) {
-                    handleSendEmails({ preventDefault: () => {} } as React.FormEvent);
-                  } else {
-                    setMessage('Please add customers before sending emails');
-                  }
-                }}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                📧 Send Review Requests
-              </button>
             </div>
           </div>
 
