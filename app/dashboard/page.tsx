@@ -413,7 +413,7 @@ export default function Dashboard() {
           {analytics.deliveryRate}%
         </p>
         <p className="text-xs text-gray-500 mt-1">
-          {analytics.delivered} of {analytics.emailsSent} delivered
+          {analytics.delivered + analytics.opened + analytics.clicked} of {analytics.emailsSent} delivered
         </p>
       </>
     )}
