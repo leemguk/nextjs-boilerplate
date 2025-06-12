@@ -8,7 +8,6 @@ import EmailSettingsComponent from '../components/EmailSettingsComponent';
 interface Customer {
   name: string;
   email: string;
-  orderNumber?: string;
 }
 
 interface ActivityItem {
@@ -177,37 +176,27 @@ export default function Dashboard() {
   };
 
   const handleCustomersImported = (newCustomers: Customer[]) => {
-  setActiveTab('manual');
-  const customerText = newCustomers.map(c => {
-    if (c.orderNumber) {
-      return `${c.name}, ${c.email}, ${c.orderNumber}`;
-    }
-    return `${c.name}, ${c.email}`;
-  }).join('\n');
-  setCustomers(customerText);
-  setMessage(`✅ Successfully imported ${newCustomers.length} customers from file!`);
-};
+    setActiveTab('manual');
+    const customerText = newCustomers.map(c => `${c.name}, ${c.email}`).join('\n');
+    setCustomers(customerText);
+    setMessage(`✅ Successfully imported ${newCustomers.length} customers from file!`);
+  };
 
   const handleSendEmails = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-  setMessage('');
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
 
-  try {
-    let customerList: Customer[] = [];
+    try {
+      let customerList: Customer[] = [];
 
-    if (customers.trim()) {
-      const customerLines = customers.trim().split('\n');
-      customerList = customerLines.map(line => {
-        const parts = line.split(',').map(s => s.trim());
-        const [name, email, orderNumber] = parts;
-        return { 
-          name, 
-          email,
-          orderNumber: orderNumber || undefined // Include order number if present
-        };
-      }).filter(customer => customer.name && customer.email);
-    }
+      if (customers.trim()) {
+        const customerLines = customers.trim().split('\n');
+        customerList = customerLines.map(line => {
+          const [name, email] = line.split(',').map(s => s.trim());
+          return { name, email };
+        }).filter(customer => customer.name && customer.email);
+      }
 
       if (customerList.length === 0) {
         setMessage('Please enter valid customer data or import from a file');
