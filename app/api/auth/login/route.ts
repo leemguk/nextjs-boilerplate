@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const token = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
     );
 
     console.log(`User logged in: ${email}`);
