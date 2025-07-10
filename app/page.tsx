@@ -22,9 +22,8 @@ export default function HomePage() {
 
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       
-      const response = await fetch(`${apiUrl}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
