@@ -24,9 +24,8 @@ export default function EmailSettingsComponent() {
   const loadSettings = async () => {
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-      const response = await fetch(`${apiUrl}/api/user/email-settings`, {
+      const response = await fetch('/api/user/email-settings', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -64,9 +63,8 @@ export default function EmailSettingsComponent() {
 
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-      const response = await fetch(`${apiUrl}/api/user/email-settings`, {
+      const response = await fetch('/api/user/email-settings', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

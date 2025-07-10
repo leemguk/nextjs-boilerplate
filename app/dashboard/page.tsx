@@ -99,9 +99,8 @@ export default function Dashboard() {
     setAnalyticsLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-      const response = await fetch(`${apiUrl}/api/analytics/stats?timeRange=${timeRange}`, {
+      const response = await fetch(`/api/analytics/stats?timeRange=${timeRange}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -129,9 +128,8 @@ export default function Dashboard() {
     setActivityLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-      const response = await fetch(`${apiUrl}/api/analytics/activity?limit=6`, {
+      const response = await fetch(`/api/analytics/activity?limit=6`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -205,9 +203,8 @@ export default function Dashboard() {
       }
 
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-      const response = await fetch(`${apiUrl}/api/email/send`, {
+      const response = await fetch(`/api/email/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
