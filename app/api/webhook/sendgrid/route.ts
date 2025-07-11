@@ -1,214 +1,161 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-// SendGrid Event Types
-interface SendGridEvent {
-  event: 'processed' | 'dropped' | 'delivered' | 'deferred' | 'bounce' | 'open' | 'click' | 'spamreport' | 'unsubscribe' | 'group_unsubscribe' | 'group_resubscribe';
-  email: string;
-  timestamp: number;
-  'smtp-id': string;
-  sg_event_id: string;
-  sg_message_id: string;
-  useragent?: string;
-  ip?: string;
-  url?: string;
-  reason?: string;
-  status?: string;
-  type?: string;
-  category?: string[];
-  asm_group_id?: number;
-  // Custom args we pass when sending
-  emailId?: string;
-  campaignId?: string;
-  userId?: string;
-}
+// Track basic stats
+let webhookStats = {
+  totalProcessed: 0,
+  totalSkipped: 0,
+  lastReset: new Date()
+};
 
-// POST - Handle SendGrid webhook events
+// POST - Handle SendGrid webhook events (matching working Replit version)
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-  console.log(`[${new Date().toISOString()}] === SendGrid Webhook POST Request Received ===`);
-  
   try {
-    // Log ALL incoming request details
-    console.log('Request URL:', request.url);
-    console.log('Request method:', request.method);
-    console.log('Headers:', Object.fromEntries(request.headers.entries()));
-    console.log('User-Agent:', request.headers.get('user-agent'));
-    console.log('Content-Type:', request.headers.get('content-type'));
+    const events = await request.json();
+    const eventArray = Array.isArray(events) ? events : [events];
     
-    // Verify webhook signature (optional but recommended)
-    const signature = request.headers.get('x-twilio-email-event-webhook-signature');
-    const timestamp = request.headers.get('x-twilio-email-event-webhook-timestamp');
-    
-    // TODO: Implement signature verification if SENDGRID_WEBHOOK_VERIFICATION_KEY is set
-    // For now, we'll proceed without verification
-    
-    // Try to parse JSON body
-    let rawBody;
-    try {
-      rawBody = await request.text();
-      console.log('Raw body received:', rawBody);
-    } catch (bodyError) {
-      console.error('Error reading request body:', bodyError);
-      return NextResponse.json({ success: false, error: 'Could not read request body' }, { status: 400 });
-    }
-    
-    let events: SendGridEvent[];
-    try {
-      events = JSON.parse(rawBody);
-      console.log('Parsed events:', JSON.stringify(events, null, 2));
-    } catch (parseError) {
-      console.error('Error parsing JSON:', parseError);
-      return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
-    }
-    
-    if (!Array.isArray(events)) {
-      console.error('Invalid webhook payload - not an array:', events);
-      return NextResponse.json({
-        success: false,
-        error: 'Invalid webhook payload'
-      }, { status: 400 });
-    }
+    let processedCount = 0;
+    let skippedCount = 0;
 
-    console.log(`Processing ${events.length} SendGrid webhook events`);
-
-    // Process each event
-    for (const event of events) {
+    for (const event of eventArray) {
       try {
-        console.log(`Processing event: ${event.event} for ${event.email}`);
-        console.log('Event data:', JSON.stringify(event, null, 2));
-        
-        const { emailId, sg_message_id } = event;
-        
-        // Try to find the email record by custom emailId or SendGrid message ID
-        let emailRecord;
-        if (emailId) {
-          console.log(`Looking for email by ID: ${emailId}`);
-          emailRecord = await db.query(
-            'SELECT id FROM emails WHERE id = $1',
-            [emailId]
-          );
-        } else if (sg_message_id) {
-          console.log(`Looking for email by SendGrid message ID: ${sg_message_id}`);
-          emailRecord = await db.query(
-            'SELECT id FROM emails WHERE "sendgridMessageId" = $1',
-            [sg_message_id]
-          );
+        const result = await processSendGridEvent(event);
+        if (result === 'processed') {
+          processedCount++;
+          webhookStats.totalProcessed++;
         } else {
-          console.log(`Looking for email by email address: ${event.email}`);
-          // Try to find by email address and approximate time
-          emailRecord = await db.query(
-            'SELECT id FROM emails WHERE "to" = $1 AND "sentAt" > NOW() - INTERVAL \'24 hours\' ORDER BY "sentAt" DESC LIMIT 1',
-            [event.email]
-          );
-        }
-
-        console.log(`Found ${emailRecord.rows.length} matching email records`);
-        
-        if (!emailRecord.rows.length) {
-          console.warn(`Could not find email record for event: ${event.event} - ${event.email}`);
-          continue;
-        }
-
-        const recordId = emailRecord.rows[0].id;
-        const eventTime = new Date(event.timestamp * 1000);
-
-        // Update email record based on event type
-        console.log(`Updating email record ${recordId} for event: ${event.event}`);
-        switch (event.event) {
-          case 'delivered':
-            console.log(`Marking email ${recordId} as delivered at ${eventTime}`);
-            await db.query(
-              'UPDATE emails SET status = $1, "deliveredAt" = $2, "sendgridMessageId" = COALESCE("sendgridMessageId", $3) WHERE id = $4',
-              ['delivered', eventTime, sg_message_id, recordId]
-            );
-            console.log(`Email ${recordId} marked as delivered`);
-            break;
-
-          case 'open':
-            await db.query(
-              'UPDATE emails SET "openedAt" = COALESCE("openedAt", $1), "openCount" = "openCount" + 1 WHERE id = $2',
-              [eventTime, recordId]
-            );
-            break;
-
-          case 'click':
-            await db.query(
-              'UPDATE emails SET "clickedAt" = COALESCE("clickedAt", $1), "clickCount" = "clickCount" + 1 WHERE id = $2',
-              [eventTime, recordId]
-            );
-            
-            // Log the clicked URL for analytics
-            if (event.url) {
-              console.log(`User clicked: ${event.url} in email ${recordId}`);
-            }
-            break;
-
-          case 'bounce':
-          case 'dropped':
-            await db.query(
-              'UPDATE emails SET status = $1, "bouncedAt" = $2 WHERE id = $3',
-              ['bounced', eventTime, recordId]
-            );
-            
-            // Log bounce reason
-            if (event.reason) {
-              console.error(`Email bounced: ${event.email} - ${event.reason}`);
-            }
-            break;
-
-          case 'spamreport':
-            await db.query(
-              'UPDATE emails SET status = $1, "spamAt" = $2 WHERE id = $3',
-              ['spam', eventTime, recordId]
-            );
-            break;
-
-          case 'deferred':
-            // Email is temporarily undeliverable, SendGrid will retry
-            console.log(`Email deferred: ${event.email} - ${event.reason || 'Unknown reason'}`);
-            break;
-
-          case 'processed':
-            // Email has been received by SendGrid and is being processed
-            await db.query(
-              'UPDATE emails SET status = $1, "sendgridMessageId" = COALESCE("sendgridMessageId", $2) WHERE id = $3',
-              ['processing', sg_message_id, recordId]
-            );
-            break;
-
-          default:
-            console.log(`Unhandled event type: ${event.event} for email ${event.email}`);
+          skippedCount++;
+          webhookStats.totalSkipped++;
         }
       } catch (error) {
-        console.error(`Error processing event for ${event.email}:`, error);
-        // Continue processing other events even if one fails
+        console.error('Webhook event processing error:', error);
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Processed ${events.length} events`
+    // Only log if we processed review app emails
+    if (processedCount > 0) {
+      console.log(`📧 Processed ${processedCount} review app events`);
+    }
+
+    return NextResponse.json({ 
+      processed: processedCount,
+      skipped: skippedCount
     });
 
   } catch (error) {
-    console.error('Webhook processing error:', error);
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to process webhook'
-    }, { status: 500 });
-  } finally {
-    const endTime = Date.now();
-    console.log(`[${new Date().toISOString()}] === Webhook processing completed in ${endTime - startTime}ms ===`);
+    console.error('Webhook batch error:', error);
+    return NextResponse.json({ error: 'Processing failed' });
+  }
+}
+
+// Process SendGrid event (matching Replit logic)
+async function processSendGridEvent(event: any): Promise<'processed' | 'skipped'> {
+  try {
+    const customerEmail = event.email;
+    const eventType = event.event;
+    const timestamp = event.timestamp ? new Date(event.timestamp * 1000) : new Date();
+
+    if (!customerEmail || !eventType) {
+      return 'skipped';
+    }
+
+    // Check if email exists in our review app database
+    // Try to find by SendGrid message ID first (more accurate)
+    let emailResult;
+    if (event.sg_message_id) {
+      emailResult = await db.query(`
+        SELECT id, "userId", "to", status, "createdAt"
+        FROM emails 
+        WHERE "sendgridMessageId" = $1
+        LIMIT 1
+      `, [event.sg_message_id.split('.')[0]]); // SendGrid adds .filter after ID
+    }
+
+    // Fallback to email address if no message ID match
+    if (!emailResult || emailResult.rows.length === 0) {
+      emailResult = await db.query(`
+        SELECT id, "userId", "to", status, "createdAt"
+        FROM emails 
+        WHERE "to" = $1
+        ORDER BY "createdAt" DESC
+        LIMIT 1
+      `, [customerEmail]);
+    }
+
+    const emailRecord = emailResult.rows[0];
+
+    if (!emailRecord) {
+      return 'skipped'; // E-commerce email, skip silently
+    }
+
+    // Update email status
+    const success = await updateEmailStatus(emailRecord.id, eventType, timestamp, customerEmail);
+
+    // Only log important events
+    if (success && ['open', 'click', 'bounce', 'spamreport'].includes(eventType)) {
+      console.log(`📧 ${eventType.toUpperCase()}: ${customerEmail}`);
+    }
+
+    return 'processed';
+
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Update email status (matching Replit logic)
+async function updateEmailStatus(
+  emailId: string, 
+  eventType: string, 
+  timestamp: Date,
+  customerEmail: string
+): Promise<boolean> {
+  try {
+    let updateQuery = '';
+    let updateParams: any[] = [];
+
+    switch (eventType) {
+      case 'delivered':
+        updateQuery = `UPDATE emails SET status = $1, "deliveredAt" = $3, "updatedAt" = NOW() WHERE id = $2`;
+        updateParams = ['delivered', emailId, timestamp];
+        break;
+      case 'open':
+        updateQuery = `UPDATE emails SET status = $1, "openedAt" = $3, "openCount" = COALESCE("openCount", 0) + 1, "updatedAt" = NOW() WHERE id = $2`;
+        updateParams = ['opened', emailId, timestamp];
+        break;
+      case 'click':
+        updateQuery = `UPDATE emails SET status = $1, "clickedAt" = $3, "clickCount" = COALESCE("clickCount", 0) + 1, "updatedAt" = NOW() WHERE id = $2`;
+        updateParams = ['clicked', emailId, timestamp];
+        break;
+      case 'bounce':
+      case 'dropped':
+        updateQuery = `UPDATE emails SET status = $1, "bouncedAt" = $3, "updatedAt" = NOW() WHERE id = $2`;
+        updateParams = ['bounced', emailId, timestamp];
+        break;
+      case 'spamreport':
+        updateQuery = `UPDATE emails SET status = $1, "spamAt" = $3, "updatedAt" = NOW() WHERE id = $2`;
+        updateParams = ['spam', emailId, timestamp];
+        break;
+      case 'processed':
+        return true; // Acknowledge silently
+      default:
+        return true; // Unknown events, ignore silently
+    }
+
+    const result = await db.query(updateQuery, updateParams);
+    return (result.rowCount || 0) > 0;
+
+  } catch (error) {
+    console.error(`Database error for ${customerEmail}:`, error);
+    return false;
   }
 }
 
 // GET - Health check for webhook endpoint
 export async function GET() {
   return NextResponse.json({
-    success: true,
-    message: 'SendGrid webhook endpoint is active',
+    message: 'Webhook working',
+    stats: webhookStats,
     timestamp: new Date().toISOString()
   });
 }
