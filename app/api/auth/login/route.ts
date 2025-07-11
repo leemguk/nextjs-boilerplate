@@ -5,7 +5,17 @@ import { db } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   console.log('Login POST endpoint hit');
+  
   try {
+    // First, let's just test if the endpoint is reachable
+    const contentType = request.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return NextResponse.json({
+        success: false,
+        error: 'Content-Type must be application/json'
+      }, { status: 400 });
+    }
+
     const { email, password } = await request.json();
 
     // Validate input
@@ -72,4 +82,12 @@ export async function POST(request: NextRequest) {
       error: 'Failed to login'
     }, { status: 500 });
   }
+}
+
+// Add a GET handler to test if the route is accessible
+export async function GET() {
+  return NextResponse.json({ 
+    message: 'Login endpoint is working. Use POST to login.',
+    timestamp: new Date().toISOString()
+  });
 }
