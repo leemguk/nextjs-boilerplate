@@ -10,8 +10,13 @@ let webhookStats = {
 
 // POST - Handle SendGrid webhook events (matching working Replit version)
 export async function POST(request: NextRequest) {
+  // ALWAYS log when webhook is called
+  console.log('=== WEBHOOK CALLED ===', new Date().toISOString());
+  console.log('Headers:', Object.fromEntries(request.headers.entries()));
+  
   try {
     const events = await request.json();
+    console.log('Raw events:', JSON.stringify(events, null, 2));
     const eventArray = Array.isArray(events) ? events : [events];
     
     let processedCount = 0;
