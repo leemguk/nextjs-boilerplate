@@ -77,9 +77,15 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in user login:', error);
+    
+    // Return more specific error in development
+    const errorMessage = process.env.NODE_ENV === 'development' 
+      ? `Failed to login: ${error instanceof Error ? error.message : 'Unknown error'}`
+      : 'Failed to login';
+    
     return NextResponse.json({
       success: false,
-      error: 'Failed to login'
+      error: errorMessage
     }, { status: 500 });
   }
 }
