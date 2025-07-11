@@ -22,10 +22,19 @@ export default function HomePage() {
 
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       
-      // Construct the full URL properly
-      const url = apiUrl ? `${apiUrl}${endpoint}` : endpoint;
+      // Construct the full URL properly - handle undefined and empty string cases
+      const url = apiUrl && apiUrl !== 'undefined' && apiUrl !== '' 
+        ? `${apiUrl}${endpoint}` 
+        : endpoint;
+      
+      console.log('Login attempt:', {
+        endpoint,
+        apiUrl,
+        url,
+        method: 'POST'
+      });
       
       const response = await fetch(url, {
         method: 'POST',
