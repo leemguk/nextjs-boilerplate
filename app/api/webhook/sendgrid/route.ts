@@ -26,6 +26,10 @@ interface SendGridEvent {
 // POST - Handle SendGrid webhook events
 export async function POST(request: NextRequest) {
   try {
+    // Log incoming webhook request
+    console.log('=== SendGrid Webhook Received ===');
+    console.log('Headers:', Object.fromEntries(request.headers.entries()));
+    
     // Verify webhook signature (optional but recommended)
     const signature = request.headers.get('x-twilio-email-event-webhook-signature');
     const timestamp = request.headers.get('x-twilio-email-event-webhook-timestamp');
@@ -35,7 +39,10 @@ export async function POST(request: NextRequest) {
     
     const events: SendGridEvent[] = await request.json();
     
+    console.log('Raw events received:', JSON.stringify(events, null, 2));
+    
     if (!Array.isArray(events)) {
+      console.error('Invalid webhook payload - not an array:', events);
       return NextResponse.json({
         success: false,
         error: 'Invalid webhook payload'
@@ -47,21 +54,27 @@ export async function POST(request: NextRequest) {
     // Process each event
     for (const event of events) {
       try {
+        console.log(`Processing event: ${event.event} for ${event.email}`);
+        console.log('Event data:', JSON.stringify(event, null, 2));
+        
         const { emailId, sg_message_id } = event;
         
         // Try to find the email record by custom emailId or SendGrid message ID
         let emailRecord;
         if (emailId) {
+          console.log(`Looking for email by ID: ${emailId}`);
           emailRecord = await db.query(
             'SELECT id FROM emails WHERE id = $1',
             [emailId]
           );
         } else if (sg_message_id) {
+          console.log(`Looking for email by SendGrid message ID: ${sg_message_id}`);
           emailRecord = await db.query(
             'SELECT id FROM emails WHERE "sendgridMessageId" = $1',
             [sg_message_id]
           );
         } else {
+          console.log(`Looking for email by email address: ${event.email}`);
           // Try to find by email address and approximate time
           emailRecord = await db.query(
             'SELECT id FROM emails WHERE "to" = $1 AND "sentAt" > NOW() - INTERVAL \'24 hours\' ORDER BY "sentAt" DESC LIMIT 1',
@@ -69,6 +82,8 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        console.log(`Found ${emailRecord.rows.length} matching email records`);
+        
         if (!emailRecord.rows.length) {
           console.warn(`Could not find email record for event: ${event.event} - ${event.email}`);
           continue;
@@ -78,12 +93,15 @@ export async function POST(request: NextRequest) {
         const eventTime = new Date(event.timestamp * 1000);
 
         // Update email record based on event type
+        console.log(`Updating email record ${recordId} for event: ${event.event}`);
         switch (event.event) {
           case 'delivered':
+            console.log(`Marking email ${recordId} as delivered at ${eventTime}`);
             await db.query(
               'UPDATE emails SET status = $1, "deliveredAt" = $2, "sendgridMessageId" = COALESCE("sendgridMessageId", $3) WHERE id = $4',
               ['delivered', eventTime, sg_message_id, recordId]
             );
+            console.log(`Email ${recordId} marked as delivered`);
             break;
 
           case 'open':
