@@ -97,23 +97,37 @@ export async function POST(request: NextRequest) {
 
     const campaignId = campaignResult.rows[0].id;
 
-    // Prepare email template
-    const subject = `Hi {{customerName}}, how was your recent order?`;
-    const emailTemplate = `Hi {{customerName}},
+    // Prepare email template - matching Replit version
+    const subject = `We'd love your feedback, {{customerName}}!`;
+    const emailTemplate = `Hello {{customerName}},
 
-Thank you for your recent order with Ransom Spares!
+I hope this email finds you well. I'm reaching out to thank you for choosing us for your recent order, it really means a lot.
 
-We'd love to hear about your experience. Could you take a moment to leave us a review on Trustpilot?
+As a family-run business based in Somerset, we take great pride in providing fast, reliable, and personalised service to each of our customers. We believe in what we do and are always striving to improve and grow.
 
-[Leave a Review on Trustpilot](https://uk.trustpilot.com/review/ransomspares.co.uk)
+To help us spread the word and grow our customer base, we'd be incredibly grateful if you could leave us a review on Trustpilot. Your feedback will not only help us grow, but also allow others to see the level of service we provide.
 
-Your feedback helps us improve and helps other customers make informed decisions.
+To leave your feedback, just click the link below:
 
-Thank you for choosing Ransom Spares!
+[Leave a Review on Trustpilot](https://uk.trustpilot.com/evaluate/ransomspares.co.uk)
+
+We truly appreciate your support and look forward to continuing to serve you in the future.
+
+Thank you again for your trust in us.
 
 Best regards,
+
 ${displayName}
-Ransom Spares Team`;
+Ransom Spares
+
+E: ${fromEmail}
+
+---
+
+Ransom Spares
+Supplier of spares and accessories for electric domestic appliances.
+The information in this email and attachments is confidential and intended for the sole use of the addressee(s). Access, copying, disclosure or re-use, in any way, of the information contained in this email and attachments by anyone other than the addressee(s) are unauthorised. If you have received this email in error, please return it to the sender and highlight the error. We accept no legal liability for the content of the message. Any opinions or views presented are solely the responsibility of the author and do not necessarily represent those of Ransom Spares. We cannot guarantee that this message has not been modified in transit, and this message should not be viewed as contractually binding. Although we have taken reasonable steps to ensure that this email and attachments are free from any virus, we advise that in keeping with good computing practice the recipient should ensure they are actually virus free.
+Without prejudice and subject to contract. Company Reg: 6779183. VAT Number: 948195871`;
 
     // Send emails via SendGrid
     let sentCount = 0;
@@ -161,11 +175,21 @@ Ransom Spares Team`;
           html: personalizedContent.replace(/\n/g, '<br>').replace(
             /\[Leave a Review on Trustpilot\]\((.*?)\)/,
             '<a href="$1" style="background-color: #00b67a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0;">Leave a Review on Trustpilot</a>'
-          ),
+          ).replace(/---/g, '<hr>').replace(/E: ([^\n]+)/g, '<strong>E:</strong> <a href="mailto:$1">$1</a>'),
           customArgs: {
             emailId: emailId.toString(),
             campaignId: campaignId.toString(),
             userId: user.id
+          },
+          trackingSettings: {
+            clickTracking: {
+              enable: true,
+              enableText: false
+            },
+            openTracking: {
+              enable: true,
+              substitutionTag: '%open-track%'
+            }
           }
         };
 
