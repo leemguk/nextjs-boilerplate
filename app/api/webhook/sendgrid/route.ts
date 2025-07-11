@@ -25,10 +25,16 @@ interface SendGridEvent {
 
 // POST - Handle SendGrid webhook events
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  console.log(`[${new Date().toISOString()}] === SendGrid Webhook POST Request Received ===`);
+  
   try {
-    // Log incoming webhook request
-    console.log('=== SendGrid Webhook Received ===');
+    // Log ALL incoming request details
+    console.log('Request URL:', request.url);
+    console.log('Request method:', request.method);
     console.log('Headers:', Object.fromEntries(request.headers.entries()));
+    console.log('User-Agent:', request.headers.get('user-agent'));
+    console.log('Content-Type:', request.headers.get('content-type'));
     
     // Verify webhook signature (optional but recommended)
     const signature = request.headers.get('x-twilio-email-event-webhook-signature');
@@ -37,9 +43,24 @@ export async function POST(request: NextRequest) {
     // TODO: Implement signature verification if SENDGRID_WEBHOOK_VERIFICATION_KEY is set
     // For now, we'll proceed without verification
     
-    const events: SendGridEvent[] = await request.json();
+    // Try to parse JSON body
+    let rawBody;
+    try {
+      rawBody = await request.text();
+      console.log('Raw body received:', rawBody);
+    } catch (bodyError) {
+      console.error('Error reading request body:', bodyError);
+      return NextResponse.json({ success: false, error: 'Could not read request body' }, { status: 400 });
+    }
     
-    console.log('Raw events received:', JSON.stringify(events, null, 2));
+    let events: SendGridEvent[];
+    try {
+      events = JSON.parse(rawBody);
+      console.log('Parsed events:', JSON.stringify(events, null, 2));
+    } catch (parseError) {
+      console.error('Error parsing JSON:', parseError);
+      return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
+    }
     
     if (!Array.isArray(events)) {
       console.error('Invalid webhook payload - not an array:', events);
@@ -172,10 +193,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Webhook processing error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json({
       success: false,
       error: 'Failed to process webhook'
     }, { status: 500 });
+  } finally {
+    const endTime = Date.now();
+    console.log(`[${new Date().toISOString()}] === Webhook processing completed in ${endTime - startTime}ms ===`);
   }
 }
 
