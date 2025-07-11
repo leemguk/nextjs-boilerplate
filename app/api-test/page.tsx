@@ -27,7 +27,7 @@ export default function ApiTestPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: 'test@example.com',
+          email: 'test@ransomspares.co.uk',
           password: 'testpassword'
         }),
       });

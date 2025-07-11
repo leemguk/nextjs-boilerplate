@@ -15,15 +15,14 @@ const createPool = () => {
     connectionTimeoutMillis: 2000,
   };
 
-  // Supabase requires SSL in production
-  // The connection string format is usually: postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
-  if (connectionString.includes('supabase') || connectionString.includes('pooler.supabase.com')) {
-    // Supabase connection pooler requires this exact SSL configuration
-    config.ssl = true;
-  } else if (process.env.NODE_ENV === 'production') {
-    // Other providers might need different SSL settings
+  // Configure SSL for production databases
+  // Most cloud providers (including Supabase) use self-signed certificates
+  if (connectionString.includes('supabase') || 
+      connectionString.includes('pooler.supabase.com') ||
+      connectionString.includes('postgres.') ||
+      process.env.NODE_ENV === 'production') {
     config.ssl = {
-      rejectUnauthorized: false
+      rejectUnauthorized: false  // Accept self-signed certificates
     };
   }
 
