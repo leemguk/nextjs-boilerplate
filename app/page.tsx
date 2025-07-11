@@ -22,15 +22,22 @@ export default function HomePage() {
 
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       
-      const response = await fetch(`${apiUrl}${endpoint}`, {
+      // Construct the full URL properly
+      const url = apiUrl ? `${apiUrl}${endpoint}` : endpoint;
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(formData),
       });
+
+      if (!response.ok) {
+        console.error('Auth response error:', response.status, response.statusText);
+      }
 
       const result = await response.json();
 
