@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+import sgMail from '@sendgrid/mail';
 import { db } from '@/lib/db';
 
 interface Customer {
@@ -26,6 +27,17 @@ function verifyToken(request: NextRequest) {
 // POST - Send review request emails
 export async function POST(request: NextRequest) {
   try {
+    // Initialize SendGrid
+    const sendgridApiKey = process.env.SENDGRID_API_KEY;
+    if (!sendgridApiKey) {
+      console.error('SENDGRID_API_KEY is not configured');
+      return NextResponse.json({
+        success: false,
+        error: 'Email service is not configured'
+      }, { status: 500 });
+    }
+    sgMail.setApiKey(sendgridApiKey);
+
     const user = verifyToken(request);
     if (!user) {
       return NextResponse.json({
@@ -103,11 +115,16 @@ Best regards,
 ${displayName}
 Ransom Spares Team`;
 
-    // Insert email records into database (simulating email sending)
+    // Send emails via SendGrid
     let sentCount = 0;
+    const failedEmails: { email: string; error: string }[] = [];
+    
     const emailPromises = customers.map(async (customer: Customer) => {
       try {
-        // Insert email record
+        const personalizedSubject = subject.replace('{{customerName}}', customer.name);
+        const personalizedContent = emailTemplate.replace(/{{customerName}}/g, customer.name);
+        
+        // Insert email record first (as pending)
         const emailResult = await db.query(`
           INSERT INTO emails (
             "to", 
@@ -123,42 +140,87 @@ Ransom Spares Team`;
           RETURNING id
         `, [
           customer.email,
-          subject.replace('{{customerName}}', customer.name),
-          emailTemplate.replace(/{{customerName}}/g, customer.name),
-          'sent',
+          personalizedSubject,
+          personalizedContent,
+          'pending',
           user.id,
           campaignId
         ]);
 
-        // Simulate email delivery success (in real implementation, you'd integrate with SendGrid)
-        // For now, we'll randomly mark some as delivered
-        const shouldDeliver = Math.random() > 0.1; // 90% delivery rate
-        
-        if (shouldDeliver) {
-          await db.query(
-            'UPDATE emails SET status = $1, "deliveredAt" = NOW() WHERE id = $2',
-            ['delivered', emailResult.rows[0].id]
-          );
-        }
+        const emailId = emailResult.rows[0].id;
 
-        sentCount++;
-      } catch (error) {
-        console.error(`Failed to send email to ${customer.email}:`, error);
+        // Send via SendGrid
+        const msg = {
+          to: customer.email,
+          from: {
+            email: fromEmail,
+            name: displayName
+          },
+          subject: personalizedSubject,
+          text: personalizedContent,
+          html: personalizedContent.replace(/\n/g, '<br>').replace(
+            /\[Leave a Review on Trustpilot\]\((.*?)\)/,
+            '<a href="$1" style="background-color: #00b67a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0;">Leave a Review on Trustpilot</a>'
+          ),
+          customArgs: {
+            emailId: emailId.toString(),
+            campaignId: campaignId.toString(),
+            userId: user.id
+          }
+        };
+
+        try {
+          const [response] = await sgMail.send(msg);
+          
+          // Update email record with SendGrid message ID
+          await db.query(
+            'UPDATE emails SET status = $1, "sendgridMessageId" = $2 WHERE id = $3',
+            ['sent', response.headers['x-message-id'], emailId]
+          );
+          
+          sentCount++;
+        } catch (sendError: any) {
+          console.error(`Failed to send email to ${customer.email}:`, sendError);
+          
+          // Update email status to failed
+          await db.query(
+            'UPDATE emails SET status = $1 WHERE id = $2',
+            ['failed', emailId]
+          );
+          
+          failedEmails.push({
+            email: customer.email,
+            error: sendError.message || 'Unknown error'
+          });
+        }
+      } catch (error: any) {
+        console.error(`Failed to process email for ${customer.email}:`, error);
+        failedEmails.push({
+          email: customer.email,
+          error: error.message || 'Failed to process email'
+        });
       }
     });
 
     await Promise.all(emailPromises);
 
-    return NextResponse.json({
-      success: true,
+    const response: any = {
+      success: sentCount > 0,
       data: {
         sent: sentCount,
         total: customers.length,
+        failed: failedEmails.length,
         campaignId: campaignId,
         campaignName: campaignName || `Campaign ${new Date().toLocaleDateString()}`
       },
-      message: `Successfully queued ${sentCount} emails for sending`
-    });
+      message: `Successfully sent ${sentCount} out of ${customers.length} emails`
+    };
+
+    if (failedEmails.length > 0) {
+      response.data.failedEmails = failedEmails;
+    }
+
+    return NextResponse.json(response, { status: sentCount > 0 ? 200 : 500 });
 
   } catch (error) {
     console.error('Error sending emails:', error);
