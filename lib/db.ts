@@ -2,15 +2,32 @@ import { Pool } from 'pg';
 
 // Create a singleton connection pool
 const createPool = () => {
-  return new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    },
+  const connectionString = process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+
+  const config: any = {
+    connectionString,
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
-  });
+  };
+
+  // Supabase requires SSL in production
+  // The connection string format is usually: postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
+  if (connectionString.includes('supabase') || connectionString.includes('pooler.supabase.com')) {
+    // Supabase connection pooler requires this exact SSL configuration
+    config.ssl = true;
+  } else if (process.env.NODE_ENV === 'production') {
+    // Other providers might need different SSL settings
+    config.ssl = {
+      rejectUnauthorized: false
+    };
+  }
+
+  return new Pool(config);
 };
 
 // Global pool instance
