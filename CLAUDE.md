@@ -57,16 +57,44 @@ All API routes follow consistent patterns:
 DATABASE_URL=        # PostgreSQL connection string
 JWT_SECRET=          # Secret for JWT signing
 JWT_EXPIRES_IN=      # Token expiration (default: '7d')
+SENDGRID_API_KEY=    # SendGrid API key for email sending
 ```
 
 ### Key Features
 1. **Email Campaign Management**: Send review requests, track opens/clicks
-2. **Customer Import**: Manual entry or CSV/Excel file upload
+2. **Customer Import**: Manual entry or CSV/Excel file upload (NOT YET IMPLEMENTED)
 3. **Analytics Dashboard**: Real-time statistics on email performance
 4. **User Settings**: Email configuration and preferences
+
+### File Upload System (From Replit Reference)
+- **File Types**: CSV, Excel (.xlsx/.xls), TSV files
+- **File Processing**: Uses XLSX library for Excel files, CSV parsing
+- **Validation**: 10MB file size limit, MIME type validation
+- **Business Logic**: Complex order validation with same-day despatch rules
+- **Name Formatting**: Proper capitalization with special cases (Mc/Mac/O' prefixes)
+- **Column Detection**: Auto-detects customer data columns in uploads
+- **Order Rules**: 
+  - Before 3pm: must despatch same day
+  - After 3pm: can despatch same day or next working day
+  - Weekend orders: must despatch by Monday 3pm
+
+### Email System Architecture
+- **SendGrid Integration**: Emails sent via SendGrid API with tracking enabled
+- **Webhook Processing**: Real-time email event processing at `/api/webhook/sendgrid`
+- **Database Updates**: Email status tracked (sent, delivered, opened, clicked, bounced)
+- **Template System**: Personalized email templates with customer name replacement
+- **Security**: Vercel deployment protection with automation bypass for webhooks
+
+### Webhook Configuration
+- **URL**: `https://nextjs-boilerplate-git-staging-ransom-spares.vercel.app/api/webhook/sendgrid?x-VERCEL_AUTOMATION_BYPASS_SECRET=[SECRET]`
+- **Events Tracked**: delivered, opened, clicked, bounced, spam, dropped
+- **Matching Logic**: Uses SendGrid message ID with fallback to email address
+- **Error Handling**: Graceful handling of unmatched emails (e-commerce vs review emails)
 
 ### Development Notes
 - No formal testing framework currently implemented
 - Manual testing available at `/api-test` page
 - Database connection test at `/api/db-test`
 - Health check endpoint at `/api/health`
+- **TODO Management**: See `TODO.md` for current tasks and project roadmap
+- **Replit Reference**: `Replit_Backend_Code_Reference_Only.md` contains the complete working backend code from the live version, including the file upload system that needs to be implemented
